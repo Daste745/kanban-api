@@ -3,8 +3,8 @@ use std::{env, error::Error};
 use actix_web::{middleware::Logger, App, HttpServer};
 use backend::config;
 use diesel::{
+    prelude::*,
     r2d2::{ConnectionManager, Pool},
-    PgConnection,
 };
 use dotenv::dotenv;
 
