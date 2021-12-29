@@ -10,4 +10,7 @@ dotenv = "0.15.0"
 env_logger = "0.9.0"
 actix-web = "3"
 diesel = { version = "1.4.8", features = ["postgres", "r2d2", "uuidv07"] }
-uuid = { version = "0.8.2", features = ["v4"] }
+uuid = { version = "0.8.2", features = ["serde", "v4"] }
+serde = "1.0.132"
+argon2 = "0.3.2"
+rand_core = { version = "0.6.3", features = ["std"] }
