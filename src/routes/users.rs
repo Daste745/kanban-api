@@ -12,7 +12,7 @@ use crate::{models::User, schema::users, DbPool};
 
 pub fn config(cfg: &mut ServiceConfig) {
     // TODO: Allow only GET, POST, PATCH, DELETE
-    cfg.service(get_user).service(new_user);
+    cfg.service(get_me).service(get_user).service(new_user);
 }
 
 #[get("/{user_id}")]
@@ -48,6 +48,11 @@ async fn new_user(pool: Data<DbPool>, Json(data): Json<User>) -> impl Responder 
         .execute(&conn)
         .unwrap();
 
+    Json(user)
+}
+
+#[get("/me")]
+async fn get_me(user: User) -> impl Responder {
     Json(user)
 }
 
