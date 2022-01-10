@@ -1,6 +1,10 @@
 FROM rust:1-slim-buster as base
 
 USER root
+
+RUN apt-get update && \
+    apt-get install libpq-dev -y
+
 WORKDIR /build
 RUN cargo init --name backend
 COPY Cargo.toml /build/Cargo.toml
