@@ -1,7 +1,7 @@
 use actix_web::{
     get, post,
     web::{Data, Json, Path, ServiceConfig},
-    Responder,
+    Error, HttpResponse, Responder,
 };
 use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
 use diesel::{insert_into, prelude::*};
@@ -16,13 +16,22 @@ pub fn config(cfg: &mut ServiceConfig) {
 }
 
 #[get("/{user_id}")]
-async fn get_user(pool: Data<DbPool>, Path(user_id): Path<Uuid>) -> impl Responder {
+async fn get_user(pool: Data<DbPool>, Path(user_id): Path<Uuid>) -> Result<HttpResponse, Error> {
     let conn = pool.get().unwrap();
-    let user = users::table.find(user_id).first::<User>(&conn).unwrap();
 
-    // TODO: 404 instead of panicking
+    let user = users::table
+        .find(user_id)
+        .first::<User>(&conn)
+        .optional()
+        .map_err(|_| HttpResponse::InternalServerError().json("Internal server error"))?;
 
-    Json(user)
+    // TODO: Rework this as a Responder
+
+    Ok(if let Some(user) = user {
+        HttpResponse::Ok().json(user)
+    } else {
+        HttpResponse::NotFound().finish()
+    })
 }
 
 #[post("")]
