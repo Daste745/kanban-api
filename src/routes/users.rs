@@ -8,7 +8,7 @@ use diesel::{insert_into, prelude::*};
 use rand_core::OsRng;
 use uuid::Uuid;
 
-use crate::{models::User, schema::users, DbPool};
+use crate::{errors::ServiceError, models::User, schema::users, DbPool};
 
 pub fn config(cfg: &mut ServiceConfig) {
     // TODO: Allow only GET, POST, PATCH, DELETE
@@ -23,9 +23,7 @@ async fn get_user(pool: Data<DbPool>, Path(user_id): Path<Uuid>) -> Result<HttpR
         .find(user_id)
         .first::<User>(&conn)
         .optional()
-        .map_err(|_| HttpResponse::InternalServerError().json("Internal server error"))?;
-
-    // TODO: Rework this as a Responder
+        .map_err(|_| ServiceError::InternalServerError)?;
 
     Ok(if let Some(user) = user {
         HttpResponse::Ok().json(user)
@@ -42,13 +40,11 @@ async fn new_user(pool: Data<DbPool>, Json(data): Json<User>) -> Result<HttpResp
         .filter(users::mail.eq(data.mail.clone()))
         .count()
         .get_result::<i64>(&conn)
-        .map_err(|_| HttpResponse::InternalServerError().json("Internal server error"))?;
+        .map_err(|_| ServiceError::InternalServerError)?;
 
     if count > 0 {
-        return Ok(HttpResponse::Forbidden().json("User with this email already exists"));
+        Err(ServiceError::UserExists)?
     }
-
-    // TODO: Rework this with a Responder
 
     let salt = SaltString::generate(&mut OsRng);
     let password_hash = Argon2::default()
@@ -65,7 +61,7 @@ async fn new_user(pool: Data<DbPool>, Json(data): Json<User>) -> Result<HttpResp
     insert_into(users::table)
         .values(&user)
         .execute(&conn)
-        .map_err(|_| HttpResponse::InternalServerError().json("Internal server error"))?;
+        .map_err(|_| ServiceError::InternalServerError)?;
 
     Ok(HttpResponse::Created().json(user))
 }
