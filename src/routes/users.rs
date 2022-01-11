@@ -35,10 +35,20 @@ async fn get_user(pool: Data<DbPool>, Path(user_id): Path<Uuid>) -> Result<HttpR
 }
 
 #[post("")]
-async fn new_user(pool: Data<DbPool>, Json(data): Json<User>) -> impl Responder {
+async fn new_user(pool: Data<DbPool>, Json(data): Json<User>) -> Result<HttpResponse, Error> {
     let conn = pool.get().unwrap();
 
-    // TODO: Ensure unique mail
+    let count = users::table
+        .filter(users::mail.eq(data.mail.clone()))
+        .count()
+        .get_result::<i64>(&conn)
+        .map_err(|_| HttpResponse::InternalServerError().json("Internal server error"))?;
+
+    if count > 0 {
+        return Ok(HttpResponse::Forbidden().json("User with this email already exists"));
+    }
+
+    // TODO: Rework this with a Responder
 
     let salt = SaltString::generate(&mut OsRng);
     let password_hash = Argon2::default()
@@ -55,9 +65,9 @@ async fn new_user(pool: Data<DbPool>, Json(data): Json<User>) -> impl Responder 
     insert_into(users::table)
         .values(&user)
         .execute(&conn)
-        .unwrap();
+        .map_err(|_| HttpResponse::InternalServerError().json("Internal server error"))?;
 
-    Json(user)
+    Ok(HttpResponse::Created().json(user))
 }
 
 #[get("/me")]
