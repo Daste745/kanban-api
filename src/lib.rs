@@ -1,3 +1,4 @@
+pub mod errors;
 pub mod models;
 pub mod routes;
 pub mod schema;
@@ -6,10 +7,10 @@ pub mod schema;
 extern crate diesel;
 use actix_web::{
     web::{scope, ServiceConfig},
-    HttpRequest,
+    Error, HttpRequest,
 };
 use diesel::r2d2;
-use jsonwebtoken::{decode, DecodingKey, Validation};
+use jsonwebtoken::{decode, errors::ErrorKind, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 
 use routes::{auth, users};
@@ -29,14 +30,17 @@ pub struct Claims {
 }
 
 impl Claims {
-    pub fn from_request(req: &HttpRequest) -> Result<Self, ()> {
-        let token = req
+    pub fn from_request(req: &HttpRequest) -> Result<Self, Error> {
+        use errors::ServiceError;
+
+        let header = req
             .headers()
             .get("authorization")
-            .unwrap()
+            .ok_or(ServiceError::MissingToken)?
             .to_str()
-            .unwrap()
-            .replace("Bearer ", "");
+            .map_err(|_| ServiceError::InvalidToken)?;
+        let token = header.replace("Bearer ", "");
+        // If the token wasn't prefixed with `Bearer ` it will error during validation
 
         let validation = Validation {
             leeway: 60,
@@ -47,12 +51,12 @@ impl Claims {
             &DecodingKey::from_secret("supersecret".as_bytes()),
             &validation,
         )
-        .unwrap();
+        .map_err(|e| match e.kind() {
+            ErrorKind::InvalidToken | ErrorKind::InvalidSignature => ServiceError::InvalidToken,
+            ErrorKind::ExpiredSignature => ServiceError::ExpiredToken,
+            _ => panic!(),
+        });
 
-        // TODO: Validation
-
-        // TODO: Error handling
-
-        Ok(token_data.claims)
+        Ok(token_data?.claims)
     }
 }

@@ -26,17 +26,19 @@ impl FromRequest for User {
     type Future = Ready<Result<User, Error>>;
 
     fn from_request(req: &HttpRequest, _pld: &mut Payload) -> Self::Future {
-        let claims = Claims::from_request(req).unwrap();
-
-        // TODO: Verify claims
+        let claims = match Claims::from_request(req) {
+            Ok(c) => c,
+            Err(e) => return ready(Err(e)),
+        };
 
         let pool = req.app_data::<Data<DbPool>>().unwrap();
         let conn = pool.get().unwrap();
 
         let user_id = Uuid::from_str(claims.sub.as_str()).unwrap();
+        // FIXME: user could be null if it was deleted after issuing a token
         let user = users::table.find(user_id).first::<User>(&conn).unwrap();
 
-        // TODO: Error handling
+        // TODO: Invalidate tokens that don't belong to any user
 
         ready(Ok(user))
     }

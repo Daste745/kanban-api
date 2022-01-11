@@ -16,3 +16,4 @@ uuid = { version = "0.8.2", features = ["serde", "v4"] }
 serde = "1.0.132"
 argon2 = "0.3.2"
 rand_core = { version = "0.6.3", features = ["std"] }
+derive_more = "0.99.17"
