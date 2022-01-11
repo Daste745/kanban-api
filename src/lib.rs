@@ -7,12 +7,13 @@ pub mod schema;
 extern crate diesel;
 
 use actix_web::{
-    web::{scope, ServiceConfig},
+    web::{scope, Data, ServiceConfig},
     Error, HttpRequest,
 };
 use chrono::{self, Duration};
 use diesel::r2d2;
 use jsonwebtoken::{decode, errors::ErrorKind, DecodingKey, Validation};
+use parse_duration::parse;
 use serde::{Deserialize, Serialize};
 
 use routes::{auth, users};
@@ -24,6 +25,21 @@ pub fn config(cfg: &mut ServiceConfig) {
         .service(scope("/auth").configure(auth::config));
 }
 
+#[derive(Debug, Clone)]
+pub struct JWTConfig {
+    key: String,
+    expiry: Duration,
+}
+
+impl JWTConfig {
+    pub fn new(key: String, expiry: String) -> Self {
+        let expiry = parse(expiry.as_str()).expect("JWT_EXPIRY must be a valid duration");
+        let expiry = Duration::from_std(expiry).unwrap();
+
+        Self { key, expiry }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
     sub: String,
@@ -32,10 +48,9 @@ pub struct Claims {
 }
 
 impl Claims {
-    pub fn new(sub: String) -> Self {
+    pub fn new(sub: String, expiry: Duration) -> Self {
         let now = chrono::Utc::now();
-        // TODO: Configurable expiry time
-        let exp = now + Duration::hours(1);
+        let exp = now + expiry;
 
         Self {
             sub,
@@ -56,13 +71,15 @@ impl Claims {
         let token = header.replace("Bearer ", "");
         // If the token wasn't prefixed with `Bearer ` it will error during validation
 
+        let jwt_config = req.app_data::<Data<JWTConfig>>().unwrap();
         let validation = Validation {
             leeway: 60,
             ..Default::default()
         };
+
         let token_data = decode::<Claims>(
             &token.as_str(),
-            &DecodingKey::from_secret("supersecret".as_bytes()),
+            &DecodingKey::from_secret(jwt_config.key.as_bytes()),
             &validation,
         )
         .map_err(|e| match e.kind() {

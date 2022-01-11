@@ -1,7 +1,7 @@
 use std::{env, error::Error};
 
 use actix_web::{middleware::Logger, App, HttpServer};
-use backend::config;
+use backend::{config, JWTConfig};
 use diesel::{
     prelude::*,
     r2d2::{ConnectionManager, Pool},
@@ -19,10 +19,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let manager = ConnectionManager::<PgConnection>::new(database_url);
     let pool = Pool::builder().build(manager)?;
 
+    let jwt_secret = env::var("JWT_SECRET").expect("JWT_SECRET must be set");
+    let jwt_expiry = env::var("JWT_EXPIRY").expect("JWT_EXPIRY must be set");
+    let jwt_config = JWTConfig::new(jwt_secret, jwt_expiry);
+
     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
             .data(pool.clone())
+            .data(jwt_config.clone())
             .configure(config)
     })
     .bind(bind_url)?

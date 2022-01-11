@@ -9,7 +9,7 @@ use jsonwebtoken::{encode, EncodingKey, Header};
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{errors::ServiceError, schema::users, Claims, DbPool};
+use crate::{errors::ServiceError, schema::users, Claims, DbPool, JWTConfig};
 
 pub fn config(cfg: &mut ServiceConfig) {
     // TODO: Allow only POST
@@ -23,7 +23,11 @@ struct LoginForm {
 }
 
 #[post("/login")]
-async fn login(pool: Data<DbPool>, Form(data): Form<LoginForm>) -> Result<HttpResponse, Error> {
+async fn login(
+    pool: Data<DbPool>,
+    jwt_config: Data<JWTConfig>,
+    Form(data): Form<LoginForm>,
+) -> Result<HttpResponse, Error> {
     let conn = pool.get().unwrap();
 
     let (user_id, password_hash) = users::table
@@ -41,16 +45,14 @@ async fn login(pool: Data<DbPool>, Form(data): Form<LoginForm>) -> Result<HttpRe
         .verify_password(data.password.as_bytes(), &password_hash)
         .map_err(|_| ServiceError::InvalidCredentials)?;
 
-    let claims = Claims::new(user_id.to_string());
+    let claims = Claims::new(user_id.to_string(), jwt_config.expiry);
 
     let token = encode(
         &Header::default(),
         &claims,
-        &EncodingKey::from_secret("supersecret".as_bytes()),
+        &EncodingKey::from_secret(jwt_config.key.as_bytes()),
     )
     .map_err(|_| ServiceError::InternalServerError)?;
-
-    // TODO: Use a strong secret
 
     Ok(HttpResponse::Ok().json(token))
 }
