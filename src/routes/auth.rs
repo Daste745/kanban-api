@@ -4,7 +4,6 @@ use actix_web::{
     Error, HttpResponse,
 };
 use argon2::{Argon2, PasswordHash, PasswordVerifier};
-use chrono::{self, Duration};
 use diesel::{prelude::*, result::Error as DieselError};
 use jsonwebtoken::{encode, EncodingKey, Header};
 use serde::Deserialize;
@@ -42,15 +41,7 @@ async fn login(pool: Data<DbPool>, Form(data): Form<LoginForm>) -> Result<HttpRe
         .verify_password(data.password.as_bytes(), &password_hash)
         .map_err(|_| ServiceError::InvalidCredentials)?;
 
-    let now = chrono::Utc::now();
-    // TODO: Configurable expiry time
-    let exp = now + Duration::hours(1);
-
-    let claims = Claims {
-        sub: user_id.to_string(),
-        iat: now.timestamp() as usize,
-        exp: exp.timestamp() as usize,
-    };
+    let claims = Claims::new(user_id.to_string());
 
     let token = encode(
         &Header::default(),

@@ -5,10 +5,12 @@ pub mod schema;
 
 #[macro_use]
 extern crate diesel;
+
 use actix_web::{
     web::{scope, ServiceConfig},
     Error, HttpRequest,
 };
+use chrono::{self, Duration};
 use diesel::r2d2;
 use jsonwebtoken::{decode, errors::ErrorKind, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
@@ -30,6 +32,18 @@ pub struct Claims {
 }
 
 impl Claims {
+    pub fn new(sub: String) -> Self {
+        let now = chrono::Utc::now();
+        // TODO: Configurable expiry time
+        let exp = now + Duration::hours(1);
+
+        Self {
+            sub,
+            iat: now.timestamp() as usize,
+            exp: exp.timestamp() as usize,
+        }
+    }
+
     pub fn from_request(req: &HttpRequest) -> Result<Self, Error> {
         use errors::ServiceError;
 
