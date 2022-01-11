@@ -1,16 +1,16 @@
 use actix_web::{
     post,
     web::{Data, Form, ServiceConfig},
-    Responder,
+    Error, HttpResponse,
 };
 use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use chrono::{self, Duration};
-use diesel::prelude::*;
+use diesel::{prelude::*, result::Error as DieselError};
 use jsonwebtoken::{encode, EncodingKey, Header};
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{schema::users, Claims, DbPool};
+use crate::{errors::ServiceError, schema::users, Claims, DbPool};
 
 pub fn config(cfg: &mut ServiceConfig) {
     // TODO: Allow only POST
@@ -24,26 +24,23 @@ struct LoginForm {
 }
 
 #[post("/login")]
-async fn login(pool: Data<DbPool>, Form(data): Form<LoginForm>) -> impl Responder {
+async fn login(pool: Data<DbPool>, Form(data): Form<LoginForm>) -> Result<HttpResponse, Error> {
     let conn = pool.get().unwrap();
 
     let (user_id, password_hash) = users::table
         .filter(users::mail.eq(data.username))
         .select((users::id, users::password))
         .first::<(Uuid, String)>(&conn)
-        .unwrap();
+        .map_err(|e| match e {
+            DieselError::NotFound => ServiceError::InvalidCredentials,
+            _ => ServiceError::InternalServerError,
+        })?;
 
     let password_hash = PasswordHash::new(&password_hash).unwrap();
 
-    if Argon2::default()
+    Argon2::default()
         .verify_password(data.password.as_bytes(), &password_hash)
-        .is_err()
-    {
-        // TODO: `WWW-Authenticate: Bearer` on any 401 UNAUTHORIZED response
-
-        // TODO: Send an error
-        return String::from("Wrong credentials");
-    }
+        .map_err(|_| ServiceError::InvalidCredentials)?;
 
     let now = chrono::Utc::now();
     // TODO: Configurable expiry time
@@ -59,13 +56,12 @@ async fn login(pool: Data<DbPool>, Form(data): Form<LoginForm>) -> impl Responde
         &Header::default(),
         &claims,
         &EncodingKey::from_secret("supersecret".as_bytes()),
-    );
+    )
+    .map_err(|_| ServiceError::InternalServerError)?;
 
     // TODO: Use a strong secret
 
-    // TODO: Error handling
-
-    token.unwrap()
+    Ok(HttpResponse::Ok().json(token))
 }
 
 // TODO: POST /logout

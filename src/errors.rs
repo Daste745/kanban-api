@@ -17,6 +17,9 @@ pub enum ServiceError {
 
     #[display(fmt = "Expired access token")]
     ExpiredToken,
+
+    #[display(fmt = "Invalid user credentials")]
+    InvalidCredentials,
 }
 
 impl ResponseError for ServiceError {
@@ -39,6 +42,10 @@ impl ResponseError for ServiceError {
             ServiceError::ExpiredToken => HttpResponse::Unauthorized()
                 .header("WWW-Authenticate", "Bearer")
                 .json("Expired access token"),
+
+            ServiceError::InvalidCredentials => HttpResponse::Unauthorized()
+                .header("WWW-Authenticate", "Bearer")
+                .json("Invalid login credentials"),
         }
     }
 }
