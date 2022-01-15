@@ -58,8 +58,12 @@ impl Claims {
             exp: exp.timestamp() as usize,
         }
     }
+}
 
-    pub fn from_request(req: &HttpRequest) -> Result<Self, Error> {
+impl TryFrom<&HttpRequest> for Claims {
+    type Error = Error;
+
+    fn try_from(req: &HttpRequest) -> Result<Self, Error> {
         use errors::ServiceError;
 
         let header = req

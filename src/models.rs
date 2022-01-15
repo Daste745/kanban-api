@@ -26,7 +26,7 @@ impl FromRequest for User {
     type Future = Ready<Result<User, Error>>;
 
     fn from_request(req: &HttpRequest, _pld: &mut Payload) -> Self::Future {
-        let claims = match Claims::from_request(req) {
+        let claims = match Claims::try_from(req) {
             Ok(c) => c,
             Err(e) => return ready(Err(e)),
         };
