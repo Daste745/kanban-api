@@ -1,7 +1,11 @@
 use std::{env, error::Error};
 
 use actix_web::{middleware::Logger, App, HttpServer};
-use backend::config;
+use backend::{config, JWTConfig};
+use diesel::{
+    prelude::*,
+    r2d2::{ConnectionManager, Pool},
+};
 use dotenv::dotenv;
 
 #[actix_web::main]
@@ -11,10 +15,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let bind_url = format!("{}:{}", env::var("HOST")?, env::var("PORT")?);
 
-    HttpServer::new(move || App::new().wrap(Logger::default()).configure(config))
-        .bind(bind_url)?
-        .run()
-        .await?;
+    let database_url = env::var("DATABASE_URL")?;
+    let manager = ConnectionManager::<PgConnection>::new(database_url);
+    let pool = Pool::builder().build(manager)?;
+
+    let jwt_secret = env::var("JWT_SECRET").expect("JWT_SECRET must be set");
+    let jwt_expiry = env::var("JWT_EXPIRY").expect("JWT_EXPIRY must be set");
+    let jwt_config = JWTConfig::new(jwt_secret, jwt_expiry);
+
+    HttpServer::new(move || {
+        App::new()
+            .wrap(Logger::default())
+            .data(pool.clone())
+            .data(jwt_config.clone())
+            .configure(config)
+    })
+    .bind(bind_url)?
+    .run()
+    .await?;
 
     Ok(())
 }
