@@ -63,7 +63,9 @@ async fn new_user(pool: Data<DbPool>, Json(data): Json<User>) -> Result<HttpResp
         .execute(&conn)
         .map_err(|_| ServiceError::InternalServerError)?;
 
-    Ok(HttpResponse::Created().json(user))
+    Ok(HttpResponse::Created()
+        .header("Location", format!("/{}", user.id))
+        .json(user))
 }
 
 #[get("/me")]
