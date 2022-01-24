@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, ResponseError};
+use actix_web::{http::StatusCode, HttpResponse, ResponseError};
 use derive_more::Display;
 
 #[derive(Debug, Display)]
@@ -6,7 +6,7 @@ pub enum ServiceError {
     #[display(fmt = "Internal server error")]
     InternalServerError,
 
-    #[display(fmt = "User already exists")]
+    #[display(fmt = "User with this email already exists")]
     UserExists,
 
     #[display(fmt = "Missing access token")]
@@ -22,30 +22,40 @@ pub enum ServiceError {
     InvalidCredentials,
 }
 
-impl ResponseError for ServiceError {
-    fn error_response(&self) -> actix_web::HttpResponse {
+impl ServiceError {
+    fn headers(&self) -> Option<Vec<(&str, &str)>> {
         match self {
-            ServiceError::InternalServerError => HttpResponse::InternalServerError().finish(),
-
-            ServiceError::UserExists => {
-                HttpResponse::Forbidden().json("User with this email already exists")
-            }
-
-            ServiceError::MissingToken => HttpResponse::Unauthorized()
-                .header("WWW-Authenticate", "Bearer")
-                .json("Missing access token"),
-
-            ServiceError::InvalidToken => HttpResponse::Unauthorized()
-                .header("WWW-Authenticate", "Bearer")
-                .json("Invalid access token"),
-
-            ServiceError::ExpiredToken => HttpResponse::Unauthorized()
-                .header("WWW-Authenticate", "Bearer")
-                .json("Expired access token"),
-
-            ServiceError::InvalidCredentials => HttpResponse::Unauthorized()
-                .header("WWW-Authenticate", "Bearer")
-                .json("Invalid login credentials"),
+            ServiceError::MissingToken
+            | ServiceError::InvalidToken
+            | ServiceError::ExpiredToken
+            | ServiceError::InvalidCredentials => Some(vec![("WWW-Authenticate", "Bearer")]),
+            _ => None,
         }
+    }
+}
+
+impl ResponseError for ServiceError {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            ServiceError::InternalServerError => StatusCode::INTERNAL_SERVER_ERROR,
+            ServiceError::UserExists => StatusCode::FORBIDDEN,
+            ServiceError::MissingToken
+            | ServiceError::InvalidToken
+            | ServiceError::ExpiredToken
+            | ServiceError::InvalidCredentials => StatusCode::UNAUTHORIZED,
+        }
+    }
+
+    fn error_response(&self) -> HttpResponse {
+        let mut res = HttpResponse::build(self.status_code());
+
+        if let Some(headers) = self.headers() {
+            for (header, value) in headers {
+                res.set_header(header, value);
+            }
+        };
+
+        let msg = format!("{}", self);
+        res.json(msg)
     }
 }
