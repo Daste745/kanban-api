@@ -4,7 +4,7 @@ use actix_web::{
     Error, HttpResponse, Responder,
 };
 use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
-use diesel::{insert_into, prelude::*};
+use diesel::prelude::*;
 use rand_core::OsRng;
 use uuid::Uuid;
 
@@ -67,7 +67,7 @@ async fn new_user(pool: Data<DbPool>, Json(data): Json<User>) -> Result<HttpResp
         password: password_hash,
     };
 
-    insert_into(users::table)
+    diesel::insert_into(users::table)
         .values(&user)
         .execute(&conn)
         .map_err(|_| ServiceError::InternalServerError)?;
