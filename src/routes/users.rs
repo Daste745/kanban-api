@@ -104,4 +104,15 @@ async fn patch_me(
     Ok(HttpResponse::Ok().json(user))
 }
 
-// TODO: Protected endpoints: PATCH and DELETE
+#[delete("/me")]
+async fn delete_me(pool: Data<DbPool>, user: User) -> Result<HttpResponse, Error> {
+    let conn = pool.get().unwrap();
+
+    diesel::delete(users::table.find(user.id))
+        .execute(&conn)
+        .map_err(|_| ServiceError::InternalServerError)?;
+
+    // TODO: Invalidate auth token
+
+    Ok(HttpResponse::NoContent().finish())
+}
