@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::{schema::users, Claims, DbPool};
 
-#[derive(Debug, Queryable, Insertable, Serialize, Deserialize)]
+#[derive(Debug, Identifiable, Queryable, Insertable, Serialize, Deserialize)]
 #[table_name = "users"]
 pub struct User {
     #[serde(skip_deserializing)]
@@ -18,6 +18,14 @@ pub struct User {
     pub mail: String,
     #[serde(skip_serializing)]
     pub password: String,
+}
+
+#[derive(Debug, AsChangeset, Deserialize)]
+#[table_name = "users"]
+pub struct UserUpdate {
+    #[serde(skip_deserializing)]
+    pub id: Uuid,
+    pub mail: Option<String>,
 }
 
 impl FromRequest for User {

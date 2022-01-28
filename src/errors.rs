@@ -9,6 +9,9 @@ pub enum ServiceError {
     #[display(fmt = "User with this email already exists")]
     UserExists,
 
+    #[display(fmt = "Cannot apply empty resource patch")]
+    EmptyUpdate,
+
     #[display(fmt = "Missing access token")]
     MissingToken,
 
@@ -39,6 +42,7 @@ impl ResponseError for ServiceError {
         match self {
             ServiceError::InternalServerError => StatusCode::INTERNAL_SERVER_ERROR,
             ServiceError::UserExists => StatusCode::FORBIDDEN,
+            ServiceError::EmptyUpdate => StatusCode::BAD_REQUEST,
             ServiceError::MissingToken
             | ServiceError::InvalidToken
             | ServiceError::ExpiredToken

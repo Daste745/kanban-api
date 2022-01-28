@@ -1,5 +1,5 @@
 use actix_web::{
-    get, post,
+    delete, get, patch, post,
     web::{Data, Json, Path, ServiceConfig},
     Error, HttpResponse, Responder,
 };
@@ -8,11 +8,20 @@ use diesel::{insert_into, prelude::*};
 use rand_core::OsRng;
 use uuid::Uuid;
 
-use crate::{errors::ServiceError, models::User, schema::users, DbPool};
+use crate::{
+    errors::ServiceError,
+    models::{User, UserUpdate},
+    schema::users,
+    DbPool,
+};
 
 pub fn config(cfg: &mut ServiceConfig) {
     // TODO: Allow only GET, POST, PATCH, DELETE
-    cfg.service(get_me).service(get_user).service(new_user);
+    cfg.service(get_me)
+        .service(patch_me)
+        .service(delete_me)
+        .service(get_user)
+        .service(new_user);
 }
 
 #[get("/{user_id}")]
@@ -71,6 +80,28 @@ async fn new_user(pool: Data<DbPool>, Json(data): Json<User>) -> Result<HttpResp
 #[get("/me")]
 async fn get_me(user: User) -> impl Responder {
     Json(user)
+}
+
+#[patch("/me")]
+async fn patch_me(
+    pool: Data<DbPool>,
+    user: User,
+    Json(mut data): Json<UserUpdate>,
+) -> Result<HttpResponse, Error> {
+    let conn = pool.get().unwrap();
+
+    if data.mail == None {
+        Err(ServiceError::EmptyUpdate)?
+    }
+
+    data.id = user.id;
+
+    let user = diesel::update(&user)
+        .set(&data)
+        .get_result::<User>(&conn)
+        .map_err(|_| ServiceError::InternalServerError)?;
+
+    Ok(HttpResponse::Ok().json(user))
 }
 
 // TODO: Protected endpoints: PATCH and DELETE
