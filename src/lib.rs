@@ -6,24 +6,14 @@ pub mod schema;
 #[macro_use]
 extern crate diesel;
 
-use actix_web::{
-    web::{scope, Data, ServiceConfig},
-    Error, HttpRequest,
-};
+use actix_web::{web::Data, Error, HttpRequest};
 use chrono::{self, Duration};
 use diesel::r2d2;
 use jsonwebtoken::{decode, errors::ErrorKind, DecodingKey, Validation};
 use parse_duration::parse;
 use serde::{Deserialize, Serialize};
 
-use routes::{auth, users};
-
 type DbPool = r2d2::Pool<r2d2::ConnectionManager<diesel::PgConnection>>;
-
-pub fn config(cfg: &mut ServiceConfig) {
-    cfg.service(scope("/users").configure(users::config))
-        .service(scope("/auth").configure(auth::config));
-}
 
 #[derive(Debug, Clone)]
 pub struct JWTConfig {

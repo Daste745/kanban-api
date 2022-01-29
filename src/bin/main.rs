@@ -1,7 +1,7 @@
 use std::{env, io};
 
 use actix_web::{middleware::Logger, App, HttpServer};
-use backend::{config, JWTConfig};
+use backend::{routes::config, JWTConfig};
 use diesel::{
     prelude::*,
     r2d2::{ConnectionManager, Pool},
