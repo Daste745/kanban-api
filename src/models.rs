@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    schema::{boards, lists, users},
+    schema::{boards, cards, lists, users},
     Claims, DbPool,
 };
 
@@ -76,4 +76,14 @@ pub struct List {
     #[serde(skip_deserializing)]
     pub board: Uuid,
     pub name: String,
+}
+
+#[derive(Debug, Identifiable, Queryable, Insertable, Associations, Serialize, Deserialize)]
+#[belongs_to(List, foreign_key = "list")]
+#[table_name = "cards"]
+pub struct Card {
+    #[serde(skip_deserializing)]
+    pub id: Uuid,
+    #[serde(skip_deserializing)]
+    pub list: Uuid,
 }
