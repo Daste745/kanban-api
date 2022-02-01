@@ -8,7 +8,10 @@ use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{schema::users, Claims, DbPool};
+use crate::{
+    schema::{boards, users},
+    Claims, DbPool,
+};
 
 #[derive(Debug, Identifiable, Queryable, Insertable, Serialize, Deserialize)]
 #[table_name = "users"]
@@ -50,4 +53,16 @@ impl FromRequest for User {
 
         ready(Ok(user))
     }
+}
+
+#[derive(Debug, Identifiable, Queryable, Insertable, Associations, Serialize, Deserialize)]
+#[belongs_to(User, foreign_key = "owner")]
+#[table_name = "boards"]
+pub struct Board {
+    #[serde(skip_deserializing)]
+    pub id: Uuid,
+    #[serde(skip_deserializing)]
+    pub owner: Uuid,
+    pub name: String,
+    pub description: Option<String>,
 }
