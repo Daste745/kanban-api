@@ -36,9 +36,4 @@ joinable!(boards -> users (owner));
 joinable!(cards -> lists (list));
 joinable!(lists -> boards (board));
 
-allow_tables_to_appear_in_same_query!(
-    boards,
-    cards,
-    lists,
-    users,
-);
+allow_tables_to_appear_in_same_query!(boards, cards, lists, users,);
