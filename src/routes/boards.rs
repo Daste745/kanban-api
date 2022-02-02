@@ -77,7 +77,7 @@ async fn get_board(pool: Data<DbPool>, Path(board_id): Path<Uuid>) -> Result<Htt
 #[patch("/{board_id}")]
 async fn patch_board(
     pool: Data<DbPool>,
-    _user: User,
+    user: User,
     Path(board_id): Path<Uuid>,
     Json(mut data): Json<BoardUpdate>,
 ) -> Result<HttpResponse, Error> {
@@ -96,6 +96,10 @@ async fn patch_board(
         .map_err(|_| ServiceError::InternalServerError)?;
 
     if let Some(board) = board {
+        if board.owner != user.id {
+            Err(HttpResponse::Unauthorized().finish())?
+        }
+
         let board = diesel::update(&board)
             .set(&data)
             .get_result::<Board>(&conn)
@@ -110,14 +114,26 @@ async fn patch_board(
 #[delete("/{board_id}")]
 async fn delete_board(
     pool: Data<DbPool>,
-    _user: User,
+    user: User,
     Path(board_id): Path<Uuid>,
 ) -> Result<HttpResponse, Error> {
     let conn = pool.get().unwrap();
 
-    diesel::delete(boards::table.find(board_id))
-        .execute(&conn)
+    let board = boards::table
+        .find(board_id)
+        .first::<Board>(&conn)
+        .optional()
         .map_err(|_| ServiceError::InternalServerError)?;
+
+    if let Some(board) = board {
+        if board.owner != user.id {
+            Err(HttpResponse::Unauthorized().finish())?
+        }
+
+        diesel::delete(&board)
+            .execute(&conn)
+            .map_err(|_| ServiceError::InternalServerError)?;
+    }
 
     Ok(HttpResponse::NoContent().finish())
 }
