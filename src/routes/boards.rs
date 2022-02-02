@@ -14,7 +14,8 @@ use crate::{
 };
 
 pub fn config(cfg: &mut ServiceConfig) {
-    cfg.service(get_board)
+    cfg.service(my_boards)
+        .service(get_board)
         .service(new_board)
         .service(patch_board)
         .service(delete_board);
@@ -43,6 +44,17 @@ async fn new_board(
     Ok(HttpResponse::Created()
         .header("Location", format!("/{}", board.id))
         .json(board))
+}
+
+#[get("/me")]
+async fn my_boards(pool: Data<DbPool>, user: User) -> Result<HttpResponse, Error> {
+    let conn = pool.get().unwrap();
+
+    let boards = Board::belonging_to(&user)
+        .load::<Board>(&conn)
+        .map_err(|_| ServiceError::InternalServerError)?;
+
+    Ok(HttpResponse::Ok().json(boards))
 }
 
 #[get("/{board_id}")]
