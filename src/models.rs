@@ -87,6 +87,14 @@ pub struct List {
     pub name: String,
 }
 
+#[derive(Debug, AsChangeset, Deserialize)]
+#[table_name = "lists"]
+pub struct ListUpdate {
+    #[serde(skip_deserializing)]
+    pub id: Uuid,
+    pub name: Option<String>,
+}
+
 #[derive(Debug, Identifiable, Queryable, Insertable, Associations, Serialize, Deserialize)]
 #[belongs_to(List, foreign_key = "list")]
 #[table_name = "cards"]
