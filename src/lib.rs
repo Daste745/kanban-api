@@ -6,14 +6,24 @@ pub mod schema;
 #[macro_use]
 extern crate diesel;
 
-use actix_web::{web::Data, Error, HttpRequest};
+use actix_web::{web::Data, HttpRequest};
 use chrono::{self, Duration};
-use diesel::r2d2;
+use diesel::{
+    r2d2::{ConnectionManager, Pool, PooledConnection},
+    PgConnection,
+};
 use jsonwebtoken::{decode, errors::ErrorKind, DecodingKey, Validation};
 use parse_duration::parse;
 use serde::{Deserialize, Serialize};
 
-type DbPool = r2d2::Pool<r2d2::ConnectionManager<diesel::PgConnection>>;
+use errors::ServiceError;
+
+pub type DbPool = Pool<ConnectionManager<PgConnection>>;
+type DbConn = PooledConnection<ConnectionManager<PgConnection>>;
+
+pub fn get_conn(pool: &Data<DbPool>) -> Result<DbConn, ServiceError> {
+    pool.get().map_err(|_| ServiceError::InternalServerError)
+}
 
 #[derive(Debug, Clone)]
 pub struct JWTConfig {
@@ -51,11 +61,9 @@ impl Claims {
 }
 
 impl TryFrom<&HttpRequest> for Claims {
-    type Error = Error;
+    type Error = ServiceError;
 
-    fn try_from(req: &HttpRequest) -> Result<Self, Error> {
-        use errors::ServiceError;
-
+    fn try_from(req: &HttpRequest) -> Result<Self, Self::Error> {
         let header = req
             .headers()
             .get("authorization")
