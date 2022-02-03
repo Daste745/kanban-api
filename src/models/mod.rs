@@ -4,7 +4,7 @@ mod list;
 mod user;
 
 pub use board::{Board, BoardUpdate};
-pub use card::Card;
+pub use card::{Card, CardUpdate};
 pub use list::{List, ListUpdate};
 pub use user::{User, UserUpdate};
 
