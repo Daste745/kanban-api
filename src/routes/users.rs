@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use crate::{
     errors::ServiceError,
+    get_conn,
     models::{User, UserUpdate},
     schema::users,
     DbPool,
@@ -26,24 +27,16 @@ pub fn config(cfg: &mut ServiceConfig) {
 
 #[get("/{user_id}")]
 async fn get_user(pool: Data<DbPool>, Path(user_id): Path<Uuid>) -> Result<HttpResponse, Error> {
-    let conn = pool.get().unwrap();
-
-    let user = users::table
-        .find(user_id)
-        .first::<User>(&conn)
-        .optional()
-        .map_err(|_| ServiceError::InternalServerError)?;
-
-    Ok(if let Some(user) = user {
-        HttpResponse::Ok().json(user)
+    if let Some(user) = User::find(&pool, user_id)? {
+        Ok(HttpResponse::Ok().json(user))
     } else {
-        HttpResponse::NotFound().finish()
-    })
+        Err(HttpResponse::NotFound().finish())?
+    }
 }
 
 #[post("")]
 async fn new_user(pool: Data<DbPool>, Json(data): Json<User>) -> Result<HttpResponse, Error> {
-    let conn = pool.get().unwrap();
+    let conn = get_conn(&pool)?;
 
     let count = users::table
         .filter(users::mail.eq(data.mail.clone()))
@@ -61,16 +54,8 @@ async fn new_user(pool: Data<DbPool>, Json(data): Json<User>) -> Result<HttpResp
         .unwrap()
         .to_string();
 
-    let user = User {
-        id: Uuid::new_v4(),
-        mail: data.mail,
-        password: password_hash,
-    };
-
-    diesel::insert_into(users::table)
-        .values(&user)
-        .execute(&conn)
-        .map_err(|_| ServiceError::InternalServerError)?;
+    let user = User::new(data.mail, password_hash);
+    user.save(&pool)?;
 
     Ok(HttpResponse::Created()
         .header("Location", format!("/{}", user.id))
@@ -88,29 +73,20 @@ async fn patch_me(
     user: User,
     Json(mut data): Json<UserUpdate>,
 ) -> Result<HttpResponse, Error> {
-    let conn = pool.get().unwrap();
-
-    if data.mail == None {
+    if data.is_empty() {
         Err(ServiceError::EmptyUpdate)?
     }
 
     data.id = user.id;
 
-    let user = diesel::update(&user)
-        .set(&data)
-        .get_result::<User>(&conn)
-        .map_err(|_| ServiceError::InternalServerError)?;
+    let user = user.update(&pool, data)?;
 
     Ok(HttpResponse::Ok().json(user))
 }
 
 #[delete("/me")]
 async fn delete_me(pool: Data<DbPool>, user: User) -> Result<HttpResponse, Error> {
-    let conn = pool.get().unwrap();
-
-    diesel::delete(users::table.find(user.id))
-        .execute(&conn)
-        .map_err(|_| ServiceError::InternalServerError)?;
+    user.delete(&pool)?;
 
     // TODO: Invalidate auth token
 
