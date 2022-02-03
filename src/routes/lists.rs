@@ -8,8 +8,8 @@ use uuid::Uuid;
 
 use crate::{
     errors::ServiceError,
+    get_conn,
     models::{Board, List, ListUpdate, User},
-    schema::{boards, lists},
     DbPool,
 };
 
@@ -28,29 +28,13 @@ async fn new_list(
     Path(board_id): Path<Uuid>,
     Json(data): Json<List>,
 ) -> Result<HttpResponse, Error> {
-    let conn = pool.get().unwrap();
-
-    let board = boards::table
-        .find(board_id)
-        .first::<Board>(&conn)
-        .optional()
-        .map_err(|_| ServiceError::InternalServerError)?;
-
-    if let Some(board) = board {
+    if let Some(board) = Board::find(&pool, board_id)? {
         if board.owner != user.id {
-            Err(ServiceError::InvalidCredentials)?
+            Err(HttpResponse::Unauthorized().finish())?
         }
 
-        let list = List {
-            id: Uuid::new_v4(),
-            board: board.id,
-            name: data.name,
-        };
-
-        diesel::insert_into(lists::table)
-            .values(&list)
-            .execute(&conn)
-            .map_err(|_| ServiceError::InternalServerError)?;
+        let list = List::new(&board, data.name);
+        list.save(&pool)?;
 
         Ok(HttpResponse::Created()
             .header("Location", format!("/{}", list.id))
@@ -62,15 +46,9 @@ async fn new_list(
 
 #[get("")]
 async fn get_lists(pool: Data<DbPool>, Path(board_id): Path<Uuid>) -> Result<HttpResponse, Error> {
-    let conn = pool.get().unwrap();
+    let conn = get_conn(&pool)?;
 
-    let board = boards::table
-        .find(board_id)
-        .first::<Board>(&conn)
-        .optional()
-        .map_err(|_| ServiceError::InternalServerError)?;
-
-    if let Some(board) = board {
+    if let Some(board) = Board::find(&pool, board_id)? {
         let lists = List::belonging_to(&board)
             .load::<List>(&conn)
             .map_err(|_| ServiceError::InternalServerError)?;
@@ -86,22 +64,8 @@ async fn get_list(
     pool: Data<DbPool>,
     Path((board_id, list_id)): Path<(Uuid, Uuid)>,
 ) -> Result<HttpResponse, Error> {
-    let conn = pool.get().unwrap();
-
-    let board = boards::table
-        .find(board_id)
-        .first::<Board>(&conn)
-        .optional()
-        .map_err(|_| ServiceError::InternalServerError)?;
-
-    if let Some(_) = board {
-        let list = lists::table
-            .find(list_id)
-            .first::<List>(&conn)
-            .optional()
-            .map_err(|_| ServiceError::InternalServerError)?;
-
-        if let Some(list) = list {
+    if let Some(_) = Board::find(&pool, board_id)? {
+        if let Some(list) = List::find(&pool, list_id)? {
             Ok(HttpResponse::Ok().json(list))
         } else {
             Err(HttpResponse::NotFound().finish())?
@@ -118,40 +82,23 @@ async fn patch_list(
     Path((board_id, list_id)): Path<(Uuid, Uuid)>,
     Json(mut data): Json<ListUpdate>,
 ) -> Result<HttpResponse, Error> {
-    let conn = pool.get().unwrap();
-
-    if data.name == None {
+    if data.is_empty() {
         Err(ServiceError::EmptyUpdate)?
     }
 
-    data.id = board_id;
-
-    let board = boards::table
-        .find(board_id)
-        .first::<Board>(&conn)
-        .optional()
-        .map_err(|_| ServiceError::InternalServerError)?;
-
-    if let Some(board) = board {
+    if let Some(board) = Board::find(&pool, board_id)? {
         if user.id != board.owner {
             Err(HttpResponse::Unauthorized().finish())?
         }
 
-        let list = List::belonging_to(&board)
-            .find(list_id)
-            .first::<List>(&conn)
-            .optional()
-            .map_err(|_| ServiceError::InternalServerError)?;
-
-        if let Some(list) = list {
+        if let Some(list) = List::find(&pool, list_id)? {
             if board.id != list.board {
                 Err(HttpResponse::Unauthorized().finish())?
             }
 
-            let list = diesel::update(&list)
-                .set(&data)
-                .get_result::<List>(&conn)
-                .map_err(|_| ServiceError::InternalServerError)?;
+            data.id = list_id;
+
+            let list = list.update(&pool, data)?;
 
             Ok(HttpResponse::Ok().json(list))
         } else {
@@ -168,33 +115,17 @@ async fn delete_list(
     user: User,
     Path((board_id, list_id)): Path<(Uuid, Uuid)>,
 ) -> Result<HttpResponse, Error> {
-    let conn = pool.get().unwrap();
-
-    let board = boards::table
-        .find(board_id)
-        .first::<Board>(&conn)
-        .optional()
-        .map_err(|_| ServiceError::InternalServerError)?;
-
-    if let Some(board) = board {
+    if let Some(board) = Board::find(&pool, board_id)? {
         if user.id != board.owner {
             Err(HttpResponse::Unauthorized().finish())?
         }
 
-        let list = List::belonging_to(&board)
-            .find(list_id)
-            .first::<List>(&conn)
-            .optional()
-            .map_err(|_| ServiceError::InternalServerError)?;
-
-        if let Some(list) = list {
+        if let Some(list) = List::find(&pool, list_id)? {
             if board.id != list.board {
                 Err(HttpResponse::BadRequest().finish())?
             }
 
-            diesel::delete(&list)
-                .execute(&conn)
-                .map_err(|_| ServiceError::InternalServerError)?;
+            list.delete(&pool)?;
         }
     }
 
